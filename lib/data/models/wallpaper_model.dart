@@ -26,6 +26,7 @@ class WallpaperModel {
   final String? backgroundUrl;
   final String? foregroundUrl;
   final WallpaperStatus status;
+  final String? rejectionReason;
   final double averageRating;
   final int ratingCount;
   final DateTime uploadedAt;
@@ -45,6 +46,7 @@ class WallpaperModel {
     this.backgroundUrl,
     this.foregroundUrl,
     this.status = WallpaperStatus.APPROVED,
+    this.rejectionReason,
     this.averageRating = 0.0,
     this.ratingCount = 0,
     required this.uploadedAt,
@@ -97,6 +99,7 @@ class WallpaperModel {
       backgroundUrl: data['background_url'],
       foregroundUrl: data['foreground_url'],
       status: status,
+      rejectionReason: data['rejection_reason'] ?? data['rejectionReason'],
       averageRating: (data['average_rating'] as num?)?.toDouble() ?? 0.0,
       ratingCount: (data['rating_count'] as num?)?.toInt() ?? 0,
       uploadedAt: uploadedAt,
@@ -119,11 +122,54 @@ class WallpaperModel {
       'background_url': backgroundUrl,
       'foreground_url': foregroundUrl,
       'status': status.name,
+      'rejection_reason': rejectionReason,
       'average_rating': averageRating,
       'rating_count': ratingCount,
       'uploaded_at': Timestamp.fromDate(uploadedAt),
       'source': source,
     };
+  }
+
+  WallpaperModel copyWith({
+    String? id,
+    String? uploaderId,
+    String? uploaderName,
+    WallpaperType? type,
+    String? categoryId,
+    String? title,
+    List<String>? tags,
+    String? imageUrl,
+    String? thumbnailUrl,
+    String? videoUrl,
+    String? backgroundUrl,
+    String? foregroundUrl,
+    WallpaperStatus? status,
+    String? rejectionReason,
+    double? averageRating,
+    int? ratingCount,
+    DateTime? uploadedAt,
+    String? source,
+  }) {
+    return WallpaperModel(
+      id: id ?? this.id,
+      uploaderId: uploaderId ?? this.uploaderId,
+      uploaderName: uploaderName ?? this.uploaderName,
+      type: type ?? this.type,
+      categoryId: categoryId ?? this.categoryId,
+      title: title ?? this.title,
+      tags: tags ?? this.tags,
+      imageUrl: imageUrl ?? this.imageUrl,
+      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+      videoUrl: videoUrl ?? this.videoUrl,
+      backgroundUrl: backgroundUrl ?? this.backgroundUrl,
+      foregroundUrl: foregroundUrl ?? this.foregroundUrl,
+      status: status ?? this.status,
+      rejectionReason: rejectionReason ?? this.rejectionReason,
+      averageRating: averageRating ?? this.averageRating,
+      ratingCount: ratingCount ?? this.ratingCount,
+      uploadedAt: uploadedAt ?? this.uploadedAt,
+      source: source ?? this.source,
+    );
   }
 
   factory WallpaperModel.fromPixabayImage(Map<String, dynamic> hit, {String categoryId = 'nature'}) {

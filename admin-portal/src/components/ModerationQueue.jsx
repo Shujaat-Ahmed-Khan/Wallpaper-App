@@ -52,8 +52,19 @@ export default function ModerationQueue() {
   const [loading, setLoading] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
   const [previewItem, setPreviewItem] = useState(null);
-  const [editingItem, setEditingItem] = useState(null);
+  const [rejectModalItem, setRejectModalItem] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [isBulkReject, setIsBulkReject] = useState(false);
   const [notification, setNotification] = useState('');
+
+  const REJECTION_PRESETS = [
+    'Low resolution or blurry artwork',
+    'Watermark, timestamp or external brand logo detected',
+    'Does not match selected category/style tags',
+    'Inappropriate or offensive imagery',
+    'Copyright infringement or non-original work',
+    'Incorrect layer formatting for 3D/Live parallax',
+  ];
 
   useEffect(() => {
     fetchPending();
@@ -120,19 +131,82 @@ export default function ModerationQueue() {
     } catch (_) {}
     setItems(prev => prev.filter(item => item.id !== id));
     setSelectedIds(prev => prev.filter(i => i !== id));
-    notify(`Wallpaper approved & moved to /live/ catalog!`);
+    notify(`Wallpaper approved & now LIVE on user app!`);
   };
 
-  const handleReject = async (id) => {
-    try {
-      await updateDoc(doc(db, 'Wallpapers', id), { status: 'REJECTED' });
-    } catch (_) {}
-    try {
-      await fetch(`/api/wallpapers/${id}/reject`, { method: 'POST' });
-    } catch (_) {}
-    setItems(prev => prev.filter(item => item.id !== id));
-    setSelectedIds(prev => prev.filter(i => i !== id));
-    notify(`Wallpaper rejected and removed from pending queue.`);
+  const handleOpenRejectModal = (item) => {
+    setRejectModalItem(item);
+    setRejectReason('');
+    setIsBulkReject(false);
+  };
+
+  const handleOpenBulkRejectModal = () => {
+    if (!selectedIds.length) return;
+    setRejectModalItem({ id: 'bulk', title: `${selectedIds.length} Wallpapers Selected` });
+    setRejectReason('');
+    setIsBulkReject(true);
+  };
+
+  const handleConfirmReject = async () => {
+    if (!rejectModalItem) return;
+    const finalReason = rejectReason.trim() || 'Does not meet community neon guidelines.';
+
+    if (isBulkReject) {
+      const idsToReject = [...selectedIds];
+      try {
+        const batch = writeBatch(db);
+        idsToReject.forEach(id => {
+          batch.update(doc(db, 'Wallpapers', id), {
+            status: 'REJECTED',
+            rejection_reason: finalReason,
+            rejectionReason: finalReason,
+          });
+        });
+        await batch.commit();
+      } catch (_) {}
+
+      for (const id of idsToReject) {
+        try {
+          await fetch(`/api/wallpapers/${id}/reject`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason: finalReason }),
+          });
+        } catch (_) {}
+      }
+
+      setItems(prev => prev.filter(item => !idsToReject.includes(item.id)));
+      setSelectedIds([]);
+      notify(`Rejected ${idsToReject.length} wallpapers with reason: "${finalReason}"`);
+    } else {
+      const id = rejectModalItem.id;
+      try {
+        await updateDoc(doc(db, 'Wallpapers', id), {
+          status: 'REJECTED',
+          rejection_reason: finalReason,
+          rejectionReason: finalReason,
+        });
+      } catch (_) {}
+      try {
+        await fetch(`/api/wallpapers/${id}/reject`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason: finalReason }),
+        });
+      } catch (_) {}
+
+      setItems(prev => prev.filter(item => item.id !== id));
+      setSelectedIds(prev => prev.filter(i => i !== id));
+      notify(`Rejected "${rejectModalItem.title}". Reason sent to creator.`);
+    }
+
+    // Disappear after confirm
+    setRejectModalItem(null);
+    setRejectReason('');
+    setIsBulkReject(false);
+    if (previewItem && (!isBulkReject && previewItem.id === rejectModalItem?.id)) {
+      setPreviewItem(null);
+    }
   };
 
   const handleBulkApprove = async () => {
@@ -144,22 +218,13 @@ export default function ModerationQueue() {
       });
       await batch.commit();
     } catch (_) {}
+    for (const id of selectedIds) {
+      try {
+        await fetch(`/api/wallpapers/${id}/approve`, { method: 'POST' });
+      } catch (_) {}
+    }
     setItems(prev => prev.filter(item => !selectedIds.includes(item.id)));
-    notify(`Bulk approved ${selectedIds.length} wallpapers!`);
-    setSelectedIds([]);
-  };
-
-  const handleBulkReject = async () => {
-    if (!selectedIds.length) return;
-    try {
-      const batch = writeBatch(db);
-      selectedIds.forEach(id => {
-        batch.update(doc(db, 'Wallpapers', id), { status: 'REJECTED' });
-      });
-      await batch.commit();
-    } catch (_) {}
-    setItems(prev => prev.filter(item => !selectedIds.includes(item.id)));
-    notify(`Bulk rejected ${selectedIds.length} wallpapers.`);
+    notify(`Bulk approved ${selectedIds.length} wallpapers! Now LIVE on user side.`);
     setSelectedIds([]);
   };
 
@@ -216,7 +281,7 @@ export default function ModerationQueue() {
             <Check className="w-4 h-4" /> Approve ({selectedIds.length})
           </button>
           <button
-            onClick={handleBulkReject}
+            onClick={handleOpenBulkRejectModal}
             disabled={!selectedIds.length}
             className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
               selectedIds.length
@@ -301,13 +366,13 @@ export default function ModerationQueue() {
                 <div className="pt-2 flex items-center space-x-2 border-t border-white/10">
                   <button
                     onClick={() => handleApprove(item.id)}
-                    className="flex-1 py-2 rounded-xl text-xs font-bold bg-[#00FF87]/20 border border-[#00FF87]/60 text-[#00FF87] hover:bg-[#00FF87] hover:text-black transition-all flex items-center justify-center gap-1"
+                    className="flex-1 py-2 rounded-xl text-xs font-bold bg-[#00FF87]/20 border border-[#00FF87]/60 text-[#00FF87] hover:bg-[#00FF87] hover:text-black transition-all flex items-center justify-center gap-1 cursor-pointer"
                   >
                     <Check className="w-3.5 h-3.5" /> Approve
                   </button>
                   <button
-                    onClick={() => handleReject(item.id)}
-                    className="flex-1 py-2 rounded-xl text-xs font-bold bg-[#FF007F]/20 border border-[#FF007F]/60 text-[#FF007F] hover:bg-[#FF007F] hover:text-white transition-all flex items-center justify-center gap-1"
+                    onClick={() => handleOpenRejectModal(item)}
+                    className="flex-1 py-2 rounded-xl text-xs font-bold bg-[#FF007F]/20 border border-[#FF007F]/60 text-[#FF007F] hover:bg-[#FF007F] hover:text-white transition-all flex items-center justify-center gap-1 cursor-pointer"
                   >
                     <X className="w-3.5 h-3.5" /> Reject
                   </button>
@@ -318,7 +383,7 @@ export default function ModerationQueue() {
         </div>
       )}
 
-      {/* Preview Modal */}
+      {/* Inspect Preview Modal */}
       {previewItem && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
           <div className="liquid-glass max-w-2xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto border-[#00E5FF] glow-cyan">
@@ -326,7 +391,7 @@ export default function ModerationQueue() {
               <h3 className="font-orbitron font-bold text-lg text-white flex items-center gap-2">
                 <Eye className="w-5 h-5 text-[#00E5FF]" /> {previewItem.title}
               </h3>
-              <button onClick={() => setPreviewItem(null)} className="text-white/60 hover:text-white">
+              <button onClick={() => setPreviewItem(null)} className="text-white/60 hover:text-white cursor-pointer">
                 <X className="w-6 h-6" />
               </button>
             </div>
@@ -354,16 +419,116 @@ export default function ModerationQueue() {
 
             <div className="flex justify-end space-x-3 pt-3 border-t border-white/10">
               <button
-                onClick={() => { handleReject(previewItem.id); setPreviewItem(null); }}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-[#FF007F]/20 text-[#FF007F] border border-[#FF007F]"
+                onClick={() => handleOpenRejectModal(previewItem)}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-[#FF007F]/20 text-[#FF007F] border border-[#FF007F] hover:bg-[#FF007F] hover:text-white transition-all cursor-pointer"
               >
                 Reject Wallpaper
               </button>
               <button
                 onClick={() => { handleApprove(previewItem.id); setPreviewItem(null); }}
-                className="px-5 py-2 rounded-xl text-xs font-bold bg-[#00FF87] text-black font-extrabold hover:shadow-lg"
+                className="px-5 py-2 rounded-xl text-xs font-bold bg-[#00FF87] text-black font-extrabold hover:shadow-[0_0_15px_rgba(0,255,135,0.6)] cursor-pointer"
               >
                 Approve & Move to Live
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rejection Reason Modal */}
+      {rejectModalItem && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="liquid-glass max-w-lg w-full p-6 space-y-4 border-[#FF007F] glow-pink animate-in fade-in zoom-in duration-200">
+            {/* Modal Header */}
+            <div className="flex justify-between items-center border-b border-white/10 pb-3">
+              <h3 className="font-orbitron font-bold text-lg text-white flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-[#FF007F]" /> Reject Submission
+              </h3>
+              <button
+                onClick={() => { setRejectModalItem(null); setRejectReason(''); }}
+                className="text-white/60 hover:text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Target Item Summary */}
+            {!isBulkReject && (
+              <div className="flex items-center space-x-3 p-3 bg-black/40 rounded-xl border border-white/10">
+                <img
+                  src={rejectModalItem.thumbnail_url || rejectModalItem.image_url}
+                  alt={rejectModalItem.title}
+                  className="w-12 h-12 object-cover rounded-lg border border-white/20 flex-shrink-0"
+                />
+                <div className="min-w-0">
+                  <h4 className="font-bold text-white text-sm truncate">{rejectModalItem.title}</h4>
+                  <p className="text-xs text-[#8E95B3]">Creator: <span className="text-[#00E5FF]">{rejectModalItem.uploader_name}</span></p>
+                </div>
+              </div>
+            )}
+
+            {isBulkReject && (
+              <div className="p-3 bg-black/40 rounded-xl border border-[#FF007F]/40 text-sm text-white">
+                Rejecting <strong className="text-[#FF007F]">{selectedIds.length}</strong> selected wallpapers. The reason below will be sent to all respective creators.
+              </div>
+            )}
+
+            {/* Quick Reason Presets */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-[#8E95B3]">Select a Common Reason or Type Below:</label>
+              <div className="flex flex-wrap gap-1.5">
+                {REJECTION_PRESETS.map((preset, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setRejectReason(preset)}
+                    className={`text-[11px] px-2.5 py-1 rounded-lg border text-left transition-all cursor-pointer ${
+                      rejectReason === preset
+                        ? 'bg-[#FF007F] text-white border-[#FF007F]'
+                        : 'bg-white/5 border-white/10 text-white/80 hover:border-[#FF007F]/60 hover:text-white'
+                    }`}
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Reason Textarea */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-white flex items-center justify-between">
+                <span>Detailed Rejection Reason:</span>
+                <span className="text-[10px] text-[#8E95B3]">Visible on Creator's phone</span>
+              </label>
+              <textarea
+                value={rejectReason}
+                onChange={e => setRejectReason(e.target.value)}
+                rows={4}
+                placeholder="Enter specific feedback explaining why this wallpaper was rejected and how the creator can fix it..."
+                className="w-full bg-black/60 border border-white/20 focus:border-[#FF007F] focus:ring-1 focus:ring-[#FF007F] rounded-xl p-3 text-sm text-white placeholder-white/30 resize-none outline-none transition-all"
+              />
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex justify-end space-x-3 pt-3 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => { setRejectModalItem(null); setRejectReason(''); }}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-white transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmReject}
+                disabled={!rejectReason.trim()}
+                className={`px-5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+                  rejectReason.trim()
+                    ? 'bg-[#FF007F] text-white hover:shadow-[0_0_15px_rgba(255,0,127,0.6)] cursor-pointer'
+                    : 'bg-white/10 text-white/30 cursor-not-allowed'
+                }`}
+              >
+                <X className="w-4 h-4" /> Confirm Rejection
               </button>
             </div>
           </div>

@@ -1,0 +1,25 @@
+[
+  {
+    "id": "sub_1792081808010",
+    "uploader_id": "guest_neon_user",
+    "uploader_name": "Neon Explorer",
+    "type": "STATIC",
+    "category_id": "cyberpunk",
+    "title": "new 2",
+    "tags": [
+      "neon"
+    ],
+    "image_url": "https://images.unsplash.com/photo-1514565131-fce0801e5785?auto=format&fit=crop&w=1200&q=80",
+    "thumbnail_url": "https://images.unsplash.com/photo-1514565131-fce0801e5785?auto=format&fit=crop&w=1200&q=80",
+    "video_url": null,
+    "background_url": null,
+    "foreground_url": null,
+    "status": "REJECTED",
+    "average_rating": 0,
+    "rating_count": 0,
+    "uploaded_at": "2026-10-15T21:30:08.010437",
+    "source": "FIREBASE",
+    "rejection_reason": "Does not meet community neon guidelines.",
+    "rejected_at": "2026-10-15T16:56:37.653Z"
+  }
+]

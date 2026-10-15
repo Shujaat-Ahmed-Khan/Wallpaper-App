@@ -185,20 +185,57 @@ class WallpaperRepository {
   // In-memory cache for instant feed switching
   static final Map<String, List<WallpaperModel>> _wallpapersCache = {};
 
+  static void clearCache() {
+    _wallpapersCache.clear();
+  }
+
+  Future<List<WallpaperModel>> _fetchBridgeApproved() async {
+    for (final host in ['127.0.0.1', '10.0.2.2']) {
+      try {
+        final client = HttpClient()..connectionTimeout = const Duration(milliseconds: 1000);
+        final request = await client.getUrl(Uri.parse('http://$host:3000/api/wallpapers/approved'));
+        final response = await request.close().timeout(const Duration(milliseconds: 1500));
+        if (response.statusCode == 200) {
+          final body = await response.transform(utf8.decoder).join();
+          final List<dynamic> listData = jsonDecode(body);
+          client.close();
+          return listData
+              .whereType<Map<String, dynamic>>()
+              .map((item) => WallpaperModel.fromMap(item))
+              .toList();
+        }
+        client.close();
+      } catch (_) {}
+    }
+    return [];
+  }
+
   Future<List<WallpaperModel>> getWallpapers({
     String? categoryId,
     WallpaperType? type,
     String? searchQuery,
     int page = 1,
   }) async {
-    final cacheKey = '${categoryId ?? "all"}_${type?.name ?? "all"}_${searchQuery ?? ""}_$page';
-    if (_wallpapersCache.containsKey(cacheKey) && _wallpapersCache[cacheKey]!.isNotEmpty) {
-      return _wallpapersCache[cacheKey]!;
-    }
-
     final List<WallpaperModel> results = [];
 
-    // 1. Instantly populate curated & local wallpapers (0ms delay)
+    // 1. Fetch approved wallpapers from Admin Portal bridge (live on user side)
+    try {
+      final bridgeApproved = await _fetchBridgeApproved();
+      for (final w in bridgeApproved) {
+        if (categoryId == null || categoryId == 'all' || w.categoryId == categoryId) {
+          if (type == null || w.type == type) {
+            results.add(w);
+          }
+        }
+        // Sync local memory status if this device submitted it
+        final idx = _localSubmissions.indexWhere((s) => s.id == w.id);
+        if (idx != -1) {
+          _localSubmissions[idx] = w;
+        }
+      }
+    } catch (_) {}
+
+    // 2. Instantly populate curated & local wallpapers
     if (type == null || type == WallpaperType.GYRO) {
       if (categoryId == null || categoryId == 'all' || categoryId == 'cyberpunk' || categoryId == 'liquid') {
         results.addAll(curatedGyroWallpapers);
@@ -223,13 +260,15 @@ class WallpaperRepository {
       if (sub.status == WallpaperStatus.APPROVED) {
         if (categoryId == null || categoryId == 'all' || sub.categoryId == categoryId) {
           if (type == null || sub.type == type) {
-            results.add(sub);
+            if (!results.any((r) => r.id == sub.id)) {
+              results.add(sub);
+            }
           }
         }
       }
     }
 
-    // 2. Parallel remote fetch with tight timeouts
+    // 3. Parallel remote fetch with tight timeouts
     final Future<List<WallpaperModel>> firestoreFuture = () async {
       try {
         final db = _firestore;
@@ -303,15 +342,13 @@ class WallpaperRepository {
       }).toList();
     }
 
-    if (finalWallpapers.isNotEmpty) {
-      _wallpapersCache[cacheKey] = finalWallpapers;
-    }
-
     return finalWallpapers;
   }
 
   Future<List<WallpaperModel>> getCreatorWallpapers(String uploaderId) async {
     final List<WallpaperModel> list = [];
+
+    // 1. Fetch from Firestore if available
     try {
       final db = _firestore;
       if (db != null) {
@@ -325,18 +362,63 @@ class WallpaperRepository {
       }
     } catch (_) {}
 
-    // Add local memory items
-    final localMatches = _localSubmissions.where((w) => w.uploaderId == uploaderId);
+    // 2. Fetch latest status & rejection reasons from Admin Portal Bridge
+    for (final host in ['127.0.0.1', '10.0.2.2']) {
+      try {
+        final client = HttpClient()..connectionTimeout = const Duration(milliseconds: 1000);
+        final request = await client.getUrl(Uri.parse('http://$host:3000/api/wallpapers/status'));
+        final response = await request.close().timeout(const Duration(milliseconds: 1500));
+        if (response.statusCode == 200) {
+          final body = await response.transform(utf8.decoder).join();
+          final List<dynamic> allItems = jsonDecode(body);
+          for (final raw in allItems) {
+            if (raw is Map<String, dynamic>) {
+              final model = WallpaperModel.fromMap(raw);
+              if (model.uploaderId == uploaderId || uploaderId == 'guest_neon_user' || model.uploaderId.isEmpty) {
+                final existingIndex = list.indexWhere((w) => w.id == model.id);
+                if (existingIndex != -1) {
+                  list[existingIndex] = model;
+                } else {
+                  list.add(model);
+                }
+                // Sync in-memory store
+                final localIndex = _localSubmissions.indexWhere((w) => w.id == model.id);
+                if (localIndex != -1) {
+                  _localSubmissions[localIndex] = model;
+                } else {
+                  _localSubmissions.add(model);
+                }
+              }
+            }
+          }
+          client.close();
+          break;
+        }
+        client.close();
+      } catch (_) {}
+    }
+
+    // 3. Add local memory items
+    final localMatches = _localSubmissions.where((w) => w.uploaderId == uploaderId || uploaderId == 'guest_neon_user');
     for (var m in localMatches) {
-      if (!list.any((existing) => existing.id == m.id)) {
+      final idx = list.indexWhere((existing) => existing.id == m.id);
+      if (idx == -1) {
         list.add(m);
+      } else {
+        // Prefer local memory if it has more recent status
+        if (m.rejectionReason != null && list[idx].rejectionReason == null) {
+          list[idx] = list[idx].copyWith(rejectionReason: m.rejectionReason);
+        }
       }
     }
+
+    list.sort((a, b) => b.uploadedAt.compareTo(a.uploadedAt));
     return list;
   }
 
   Future<void> submitCreatorWallpaper(WallpaperModel wallpaper) async {
     _localSubmissions.insert(0, wallpaper);
+    clearCache();
 
     final toSave = wallpaper.toMap();
     if (toSave['id'] == null || (toSave['id'] as String).isEmpty) {
