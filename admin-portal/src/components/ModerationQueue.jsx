@@ -57,23 +57,52 @@ export default function ModerationQueue() {
 
   useEffect(() => {
     fetchPending();
+    const interval = setInterval(() => {
+      fetchPending(false);
+    }, 3500);
+    return () => clearInterval(interval);
   }, []);
 
-  const fetchPending = async () => {
-    setLoading(true);
+  const fetchPending = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
-      const q = query(collection(db, 'Wallpapers'), where('status', '==', 'PENDING'));
-      const snapshot = await getDocs(q);
-      if (!snapshot.empty) {
-        const fetched = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-        setItems(fetched);
+      let combined = [];
+
+      // 1. Check local device bridge first (fastest, receives live mobile app uploads)
+      try {
+        const localRes = await fetch('/api/wallpapers/pending');
+        if (localRes.ok) {
+          const localList = await localRes.json();
+          if (Array.isArray(localList)) {
+            combined = [...localList];
+          }
+        }
+      } catch (_) {}
+
+      // 2. Query Firestore if online
+      try {
+        const q = query(collection(db, 'Wallpapers'), where('status', '==', 'PENDING'));
+        const snapshot = await getDocs(q);
+        if (!snapshot.empty) {
+          const firestoreList = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+          firestoreList.forEach(item => {
+            if (!combined.some(c => c.id === item.id)) {
+              combined.push(item);
+            }
+          });
+        }
+      } catch (_) {}
+
+      // 3. Fallback to mock demo items if queue is empty
+      if (combined.length > 0) {
+        setItems(combined);
       } else {
         setItems(MOCK_PENDING);
       }
     } catch (_) {
       setItems(MOCK_PENDING);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
@@ -86,6 +115,9 @@ export default function ModerationQueue() {
     try {
       await updateDoc(doc(db, 'Wallpapers', id), { status: 'APPROVED' });
     } catch (_) {}
+    try {
+      await fetch(`/api/wallpapers/${id}/approve`, { method: 'POST' });
+    } catch (_) {}
     setItems(prev => prev.filter(item => item.id !== id));
     setSelectedIds(prev => prev.filter(i => i !== id));
     notify(`Wallpaper approved & moved to /live/ catalog!`);
@@ -94,6 +126,9 @@ export default function ModerationQueue() {
   const handleReject = async (id) => {
     try {
       await updateDoc(doc(db, 'Wallpapers', id), { status: 'REJECTED' });
+    } catch (_) {}
+    try {
+      await fetch(`/api/wallpapers/${id}/reject`, { method: 'POST' });
     } catch (_) {}
     setItems(prev => prev.filter(item => item.id !== id));
     setSelectedIds(prev => prev.filter(i => i !== id));

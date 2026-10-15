@@ -53,6 +53,8 @@ app.*.map.json
 node_modules/
 **/node_modules/
 **/dist/
+pending_wallpapers.json
+**/pending_wallpapers.json
 
 # Flutter specifics
 .flutter-plugins

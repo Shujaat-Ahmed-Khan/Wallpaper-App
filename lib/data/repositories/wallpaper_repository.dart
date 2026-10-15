@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../core/constants/api_constants.dart';
@@ -335,16 +337,37 @@ class WallpaperRepository {
 
   Future<void> submitCreatorWallpaper(WallpaperModel wallpaper) async {
     _localSubmissions.insert(0, wallpaper);
+
+    final toSave = wallpaper.toMap();
+    if (toSave['id'] == null || (toSave['id'] as String).isEmpty) {
+      toSave['id'] = 'sub_${DateTime.now().millisecondsSinceEpoch}';
+    }
+    toSave['status'] = 'PENDING';
+    toSave['uploaded_at'] = DateTime.now().toIso8601String();
+
+    // 1. Try Firestore write (timeout so offline/permission issues do not block)
     try {
       final db = _firestore;
       if (db != null) {
-        final docRef = db.collection(ApiConstants.colWallpapers).doc();
-        final toSave = wallpaper.toMap();
-        toSave['id'] = docRef.id;
-        toSave['status'] = 'PENDING';
-        await docRef.set(toSave);
+        final docRef = db.collection(ApiConstants.colWallpapers).doc(toSave['id'] as String);
+        await docRef.set(toSave).timeout(const Duration(seconds: 2));
       }
     } catch (_) {}
+
+    // 2. Sync to Admin Portal dev bridge (localhost / adb reverse / emulator)
+    for (final host in ['127.0.0.1', '10.0.2.2']) {
+      try {
+        final client = HttpClient()..connectionTimeout = const Duration(milliseconds: 1500);
+        final request = await client.postUrl(Uri.parse('http://$host:3000/api/wallpapers/submit'));
+        request.headers.contentType = ContentType.json;
+        request.write(jsonEncode(toSave));
+        final response = await request.close().timeout(const Duration(seconds: 2));
+        client.close();
+        if (response.statusCode == 200) {
+          break; // Successfully received by Admin Portal
+        }
+      } catch (_) {}
+    }
   }
 
   Future<void> rateWallpaper({
