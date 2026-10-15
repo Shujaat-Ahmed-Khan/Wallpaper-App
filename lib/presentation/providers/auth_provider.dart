@@ -26,6 +26,15 @@ class CurrentUserNotifier extends AsyncNotifier<UserModel> {
     });
   }
 
+  Future<void> switchToUserMode() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      final repo = ref.read(authRepositoryProvider);
+      final current = state.asData?.value ?? await repo.getCurrentUserModel();
+      return repo.switchToUserMode(uid: current.uid);
+    });
+  }
+
   Future<void> refresh() async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {

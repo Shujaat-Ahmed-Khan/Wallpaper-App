@@ -30,6 +30,86 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
+  Future<void> _switchToUserMode() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF10131B),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(
+            color: DarkNeonTheme.primaryNeon.withValues(alpha: 0.4),
+            width: 1.2,
+          ),
+        ),
+        title: Text(
+          'SWITCH TO USER MODE?',
+          style: GoogleFonts.orbitron(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0.8,
+          ),
+        ),
+        content: const Text(
+          'You will return to Explorer Mode. Your uploads, ratings, and stats will remain safely stored on your account.',
+          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('CANCEL', style: TextStyle(color: Colors.white60, fontWeight: FontWeight.w600)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: DarkNeonTheme.primaryNeon,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('SWITCH', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      try {
+        await ref.read(currentUserProvider.notifier).switchToUserMode();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: DarkNeonTheme.primaryNeon,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              content: Row(
+                children: const [
+                  Icon(Icons.check_circle_rounded, color: Colors.black, size: 22),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'User Mode Activated. Switched to Cyber Explorer.',
+                      style: TextStyle(color: Colors.black, fontWeight: FontWeight.w800, fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: Colors.redAccent,
+              content: Text('Failed to switch mode: $e'),
+            ),
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final userAsync = ref.watch(currentUserProvider);
@@ -169,11 +249,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     ),
                   ] else ...[
                     NeonButton(
-                      text: 'OPEN CREATOR DASHBOARD',
+                      text: 'SWITCH TO USER MODE',
                       isFilled: true,
-                      neonColor: DarkNeonTheme.creatorAccent,
-                      icon: Icons.dashboard_customize_rounded,
-                      onPressed: widget.onOpenCreatorStudio,
+                      neonColor: DarkNeonTheme.primaryNeon,
+                      icon: Icons.person_outline_rounded,
+                      onPressed: _switchToUserMode,
                     ),
                   ],
 

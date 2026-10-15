@@ -45,32 +45,39 @@ class CreatorDashboardScreen extends ConsumerWidget {
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'CREATOR STUDIO',
-                              style: GoogleFonts.orbitron(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w900,
-                                color: DarkNeonTheme.creatorAccent,
-                                letterSpacing: 1.2,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'CREATOR STUDIO',
+                                style: GoogleFonts.orbitron(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
+                                  color: DarkNeonTheme.creatorAccent,
+                                  letterSpacing: 1.0,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Welcome back, ${user.displayName}',
-                              style: const TextStyle(color: DarkNeonTheme.textSecondary, fontSize: 13),
-                            ),
-                          ],
+                              const SizedBox(height: 2),
+                              Text(
+                                'Welcome back, ${user.displayName}',
+                                style: const TextStyle(color: DarkNeonTheme.textSecondary, fontSize: 13),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
                         ),
+                        const SizedBox(width: 12),
                         // Quick Upload Button
                         NeonButton(
-                          text: '+ UPLOAD',
+                          text: 'UPLOAD',
                           isFilled: true,
                           height: 38,
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
                           neonColor: DarkNeonTheme.creatorAccent,
                           icon: Icons.add_rounded,
                           onPressed: () => CreatorUploadModal.show(context),

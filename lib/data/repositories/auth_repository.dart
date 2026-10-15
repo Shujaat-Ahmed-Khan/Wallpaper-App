@@ -114,6 +114,27 @@ class AuthRepository {
     return getCurrentUserModel();
   }
 
+  Future<UserModel> switchToUserMode({
+    required String uid,
+  }) async {
+    final firestore = _firestore;
+    if (firestore != null) {
+      try {
+        await firestore.collection(ApiConstants.colUsers).doc(uid).set({
+          'role': 'EXPLORER',
+        }, SetOptions(merge: true)).timeout(const Duration(seconds: 2));
+      } catch (_) {}
+    }
+
+    if (_mockUser != null && _mockUser!.uid == uid) {
+      _mockUser = _mockUser!.copyWith(
+        role: 'EXPLORER',
+      );
+      return _mockUser!;
+    }
+    return getCurrentUserModel();
+  }
+
   Future<void> signInAnonymously() async {
     try {
       await _auth?.signInAnonymously();

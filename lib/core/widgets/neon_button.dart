@@ -13,6 +13,7 @@ class NeonButton extends StatelessWidget {
   final double? width;
   final double borderRadius;
   final bool isLoading;
+  final EdgeInsetsGeometry? padding;
 
   const NeonButton({
     super.key,
@@ -25,6 +26,7 @@ class NeonButton extends StatelessWidget {
     this.width,
     this.borderRadius = 16.0,
     this.isLoading = false,
+    this.padding,
   });
 
   @override
@@ -35,13 +37,13 @@ class NeonButton extends StatelessWidget {
           ? Container(
               height: height,
               width: width,
-              padding: const EdgeInsets.symmetric(horizontal: 24),
+              padding: padding ?? const EdgeInsets.symmetric(horizontal: 24),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(borderRadius),
                 gradient: LinearGradient(
                   colors: [
                     neonColor,
-                    neonColor.withOpacity(0.8),
+                    neonColor.withValues(alpha: 0.8),
                   ],
                 ),
                 boxShadow: DarkNeonTheme.neonGlow(neonColor, blur: 18, spread: 2, opacity: 0.5),
@@ -81,10 +83,10 @@ class NeonButton extends StatelessWidget {
               height: height,
               width: width,
               borderRadius: borderRadius,
-              borderColor: neonColor.withOpacity(0.8),
+              borderColor: neonColor.withValues(alpha: 0.8),
               enableGlow: true,
               glowColor: neonColor,
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: padding ?? const EdgeInsets.symmetric(horizontal: 20),
               child: Center(
                 child: isLoading
                     ? SizedBox(
