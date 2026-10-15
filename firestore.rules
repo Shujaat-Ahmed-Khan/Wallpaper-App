@@ -1,0 +1,75 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/Users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        getUserData().role == 'ADMIN' ||
+        request.auth.token.admin == true
+      );
+    }
+
+    // Users Collection
+    match /Users/{userId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if isOwner(userId) && (
+        // Prevent regular user from self-promoting to ADMIN
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']) ||
+        request.resource.data.role != 'ADMIN' ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Categories Collection
+    match /Categories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Wallpapers Collection
+    match /Wallpapers/{wallpaperId} {
+      // Public read ONLY where status == APPROVED, or uploader reading their own
+      allow read: if resource.data.status == 'APPROVED' ||
+                     (isAuthenticated() && resource.data.uploader_id == request.auth.uid) ||
+                     isAdmin();
+
+      // Creators can only create with status == PENDING
+      allow create: if isAuthenticated() &&
+                       request.resource.data.uploader_id == request.auth.uid &&
+                       request.resource.data.status == 'PENDING';
+
+      // Only ADMIN can change status, or uploader can edit tags/title when still pending
+      allow update: if isAdmin() ||
+                       (isOwner(resource.data.uploader_id) && resource.data.status == 'PENDING');
+
+      allow delete: if isAdmin() || (isOwner(resource.data.uploader_id) && resource.data.status == 'PENDING');
+    }
+
+    // Followers Collection: docId is creatorUid_followerUid
+    match /Followers/{followId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.resource.data.follower_uid == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.follower_uid == request.auth.uid;
+    }
+
+    // Ratings Collection: docId is wallpaperId_userUid
+    match /Ratings/{ratingId} {
+      allow read: if true;
+      allow write: if isAuthenticated() && request.resource.data.user_uid == request.auth.uid;
+    }
+  }
+}

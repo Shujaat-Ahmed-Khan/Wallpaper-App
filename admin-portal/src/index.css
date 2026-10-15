@@ -1,0 +1,85 @@
+:root {
+  --bg-carbon: #0A0A10;
+  --surface-indigo: #12121E;
+  --surface-light: #1A1A2E;
+  --neon-cyan: #00E5FF;
+  --neon-magenta: #FF007F;
+  --neon-lime: #00FF87;
+  --neon-amber: #FFB800;
+  --text-main: #F0F4FF;
+  --text-muted: #8E95B3;
+  --glass-border: rgba(255, 255, 255, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'Outfit', sans-serif;
+}
+
+body {
+  background-color: var(--bg-carbon);
+  color: var(--text-main);
+  overflow-x: hidden;
+}
+
+.font-orbitron {
+  font-family: 'Orbitron', sans-serif;
+}
+
+/* Liquid Glass Containers */
+.liquid-glass {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.02) 100%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1.2px solid var(--glass-border);
+  border-radius: 20px;
+}
+
+.liquid-glass-card {
+  background: rgba(18, 18, 30, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1.2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.liquid-glass-card:hover {
+  border-color: rgba(0, 229, 255, 0.5);
+  box-shadow: 0 10px 30px -10px rgba(0, 229, 255, 0.25);
+  transform: translateY(-3px);
+}
+
+/* Neon Glows */
+.glow-cyan {
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.5);
+}
+
+.glow-magenta {
+  box-shadow: 0 0 20px rgba(255, 0, 127, 0.5);
+}
+
+.glow-lime {
+  box-shadow: 0 0 20px rgba(0, 255, 135, 0.5);
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-carbon);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--neon-cyan);
+}
